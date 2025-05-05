@@ -1,135 +1,111 @@
-#Importing the required libraries
-import pandas as pd
+# Install TensorFlow (for Jupyter only)
+#try:
+  #  import tensorflow as tf
+#except ImportError:
+    #!pip install tensorflow
+    #import tensorflow as tf
+import tensorflow as tf
 import numpy as np
-import seaborn as sns
 import matplotlib.pyplot as plt
-from sklearn.preprocessing import StandardScaler
-from sklearn.model_selection import train_test_split
-from sklearn.linear_model import LinearRegression
-#load the data into a dataframe
-df = pd.read_csv('uber.csv')
-#check the first 5 rows
-df.head()
-#print Dataset
-print("Original Dataset")
-print(df)
-#Data Preprocessing
-#drop the unnecessary columns
-df = df.drop(['Unnamed: 0', 'key'], axis= 1) #To drop unnamed column as it isn't required
-print("Dataset after dropping the unnecessary columns")
-print(df)
-print(df.dtypes) #To get the type of each column
-print(df.shape) #To get the total (Rows,Columns)
-print(df.describe()) #To get statistics of each columns
-# Filling Missing Values
-df.isnull().sum()
-df['dropoff_latitude'].fillna(value=df['dropoff_latitude'].mean(),inplace = True)
-df['dropoff_longitude'].fillna(value=df['dropoff_longitude'].median(),inplace = True)
-df.isnull().sum()
-print(df.dtypes)
-#Column pickup_datetime is in wrong format (Object). Convert it to DateTime Format
-df.pickup_datetime = pd.to_datetime(df.pickup_datetime, errors='coerce')
-print(df.dtypes)
-df= df.assign(hour = df.pickup_datetime.dt.hour,
-             day= df.pickup_datetime.dt.day,
-             month = df.pickup_datetime.dt.month,
-             year = df.pickup_datetime.dt.year,
-             dayofweek = df.pickup_datetime.dt.dayofweek)
-print(df)
-# drop the column 'pickup_daetime' using drop()
-# 'axis = 1' drops the specified column
-df = df.drop('pickup_datetime',axis=1)
-print(df)
-#Checking outliers and filling them
-#plt.plot(kind = "box",subplots = True,layout = (7,2),figsize=(15,20)) #Boxplot to check the outliers
-#Using the InterQuartile Range to fill the values
-def remove_outlier(df1 , col):
-    Q1 = df1[col].quantile(0.25)
-    Q3 = df1[col].quantile(0.75)
-    IQR = Q3 - Q1
-    lower_whisker = Q1-1.5*IQR
-    upper_whisker = Q3+1.5*IQR
-    df[col] = np.clip(df1[col] , lower_whisker , upper_whisker)
-    return df1
+from sklearn.metrics import classification_report, confusion_matrix, ConfusionMatrixDisplay
 
-def treat_outliers_all(df1 , col_list):
-    for c in col_list:
-        df1 = remove_outlier(df , c)
-    return df1
+# Load dataset
+from tensorflow.keras.datasets import imdb
+from tensorflow.keras.preprocessing.sequence import pad_sequences
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Embedding, GlobalAveragePooling1D, Dense
 
-df = treat_outliers_all(df , df.iloc[: , 0::])
-print("Outliers")
-print(df)
-pip install haversine
-import haversine as hs  #Calculate the distance using Haversine to calculate the distance between to points. Can't use Eucladian as it is for flat surface.
-travel_dist = []
-for pos in range(len(df['pickup_longitude'])):
-        long1,lati1,long2,lati2 = [df['pickup_longitude'][pos],df['pickup_latitude'][pos],df['dropoff_longitude'][pos],df['dropoff_latitude'][pos]]
-        loc1=(lati1,long1)
-        loc2=(lati2,long2)
-        c = hs.haversine(loc1,loc2)
-        travel_dist.append(c)
-    
-#print(travel_dist)
-df['dist_travel_km'] = travel_dist
-print("Distance Calculated")
-print(df)
-#Function to find the correlation
-corr = df.corr()
-print("Correlation")
-print(corr)
-#Dividing the dataset into feature and target values
+# Set random seed
+np.random.seed(42)
+tf.random.set_seed(42)
 
-x = df[['pickup_longitude','pickup_latitude','dropoff_longitude','dropoff_latitude','passenger_count','hour','day','month','year','dayofweek','dist_travel_km']]
-y = df['fare_amount']
-#Dividing the dataset into training and testing dataset
+# Load IMDB data with only top 10,000 most frequent words
+vocab_size = 10000
+max_length = 20
 
-from sklearn.model_selection import train_test_split
-X_train,X_test,y_train,y_test = train_test_split(x,y,test_size = 0.33)
-#Linear Regression
-from sklearn.linear_model import LinearRegression
-regression = LinearRegression()
-regression.fit(X_train,y_train)
-#To find the linear intercept
-print("#To find the linear intercept");
-print(regression.intercept_)
+(x_train, y_train), (x_test, y_test) = imdb.load_data(num_words=vocab_size)
 
-#To find the linear coeeficient
-print("#To find the linear coeeficient");
-print(regression.coef_);
+# Pad sequences to ensure equal length
+x_train = pad_sequences(x_train, maxlen=max_length, padding='post', truncating='post')
+x_test = pad_sequences(x_test, maxlen=max_length, padding='post', truncating='post')
 
-#To predict the target values
-prediction = regression.predict(X_test)
-print("Prediction")
-print(prediction)
+# Build model
+model = Sequential([
+    Embedding(input_dim=vocab_size, output_dim=16, input_length=max_length),
+    GlobalAveragePooling1D(),
+    Dense(16, activation='relu'),
+    Dense(1, activation='sigmoid')  # For binary classification
+])
 
-print("Y Test ")
-print(y_test)
-#Metrics Evaluation using R2, Mean Squared Error, Root Mean Sqared Error
-from sklearn.metrics import r2_score
-print("R2 Score")
-print(r2_score(y_test,prediction))
-print("MSE")
-from sklearn.metrics import mean_squared_error
-MSE = mean_squared_error(y_test,prediction)
-print(MSE)
-print("RMSE")
-RMSE = np.sqrt(MSE)
-print(RMSE)
-#Random Forest Regression
-from sklearn.ensemble import RandomForestRegressor
-#Here n_estimators means number of trees you want to build before making the prediction
-rf = RandomForestRegressor(n_estimators=100) 
-rf.fit(X_train,y_train)
-y_pred = rf.predict(X_test)
-print(y_pred)
-#Metrics evaluation for Random Forest
-R2_Random = r2_score(y_test,y_pred)
-print("R2 Random")
-print(R2_Random)
-print("MSE_Random")
-MSE_Random = mean_squared_error(y_test,y_pred)
-print(MSE_Random)
-print("RMSE")
-RMSE_Random = np.sqrt(MSE_Random)
-print(RMSE_Random)
+# Compile model
+model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
+
+# Train model
+history = model.fit(x_train, y_train, epochs=5, batch_size=512, validation_split=0.2, verbose=1)
+
+# -------- VISUALIZATION: Accuracy and Loss ----------
+plt.figure(figsize=(12, 5))
+
+plt.subplot(1, 2, 1)
+plt.plot(history.history['accuracy'], label='Train Accuracy')
+plt.plot(history.history['val_accuracy'], label='Val Accuracy')
+plt.title('Accuracy over Epochs')
+plt.xlabel('Epoch')
+plt.ylabel('Accuracy')
+plt.legend()
+plt.grid(True)
+
+plt.subplot(1, 2, 2)
+plt.plot(history.history['loss'], label='Train Loss')
+plt.plot(history.history['val_loss'], label='Val Loss')
+plt.title('Loss over Epochs')
+plt.xlabel('Epoch')
+plt.ylabel('Loss')
+plt.legend()
+plt.grid(True)
+
+plt.tight_layout()
+plt.show()
+
+# -------- EVALUATION: Predict First 10 Samples ----------
+predictions = model.predict(x_test[:10])
+
+for i in range(10):
+    print(f"Review {i+1}")
+    print(f"Predicted Sentiment: {'Positive' if predictions[i] > 0.5 else 'Negative'}")
+    print(f"Actual Sentiment   : {'Positive' if y_test[i] == 1 else 'Negative'}")
+    print("-" * 50)
+
+# -------- CLASSIFICATION REPORT ----------
+y_pred = (model.predict(x_test) > 0.5).astype("int32")
+print("\nClassification Report:")
+print(classification_report(y_test, y_pred, target_names=['Negative', 'Positive']))
+
+# -------- CONFUSION MATRIX ----------
+cm = confusion_matrix(y_test, y_pred)
+disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=['Negative', 'Positive'])
+disp.plot(cmap=plt.cm.Blues)
+plt.title("Confusion Matrix")
+plt.show()
+
+# -------- DECODE REVIEWS ----------
+# Load word index dictionary
+word_index = imdb.get_word_index()
+
+# Shift indices + add special tokens
+reverse_word_index = {value + 3: key for key, value in word_index.items()}
+reverse_word_index[0] = '[PAD]'
+reverse_word_index[1] = '[START]'
+reverse_word_index[2] = '[UNK]'
+
+# Function to decode
+def decode_review(encoded_review):
+    return ' '.join([reverse_word_index.get(i, '?') for i in encoded_review])
+
+# Show decoded review + prediction
+for i in range(5):
+    print(f"\nReview {i+1} (decoded):")
+    print(decode_review(x_test[i]))
+    print(f"Actual Sentiment   : {'Positive' if y_test[i] == 1 else 'Negative'}")
+    print(f"Predicted Sentiment: {'Positive' if predictions[i] > 0.5 else 'Negative'}")
+    print('-' * 80)
